@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: drift-premium-vps
+    runtime: python
+    repo: https://github.com/yourusername/your-repo  # optional, can be omitted if using manual deploy
+    plan: free  # or starter, professional, etc.
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+      # Create initial persistent data structure (if not exists)
+      mkdir -p /data
+      # Migrate any existing local files to persistent disk and symlink
+      for item in user_files servers_db.json config.json; do
+        if [ -e "$item" ] && [ ! -L "$item" ]; then
+          mv "$item" /data/ 2>/dev/null || true
+        fi
+        ln -sf /data/"$item" "$item"
+      done
+      # Ensure default config.json exists on disk
+      if [ ! -f /data/config.json ]; then
+        cp config.json /data/ 2>/dev/null || echo '{"site_title":"DRIFT PREMIUM VPS","site_header":"DRIFT VPS","theme":"matrix","font_family":"default","colors":{},"fonts":{},"passwords":{}}' > /data/config.json
+      fi
+      mkdir -p /data/user_files
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DEBUG
+        value: "false"
+    healthCheckPath: /ping
+    autoDeploy: true
+    disk:
+      name: drift-data
+      mountPath: /data
+      sizeGB: 1  # Increase if you plan to store many files
